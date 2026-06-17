@@ -1,0 +1,165 @@
+import time
+import requests
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+MISTY_IP = "10.42.0.197"
+BASE_URL  = f"http://{MISTY_IP}/api"
+
+# ── ✏️  Calibration ────────────────────────────────────────────────────────────
+DRIVE_SPEED    = 35.0   # working value on this robot
+TURN_SPEED     = 20.0   # working value on this robot
+CM_PER_SECOND  = 20.0   # TODO: calibrate
+DEG_PER_SECOND = 15.17  # calibrated
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _post(endpoint: str, payload: dict) -> requests.Response:
+    try:
+        r = requests.post(f"{BASE_URL}/{endpoint}", json=payload, timeout=5)
+        r.raise_for_status()
+        return r
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError(
+            f"Could not reach Misty at {MISTY_IP}. "
+            "Check her IP and that she's on the same network."
+        )
+
+
+def _cm_to_ms(cm: float) -> int:
+    return int((cm / CM_PER_SECOND) * 1000)
+
+
+def _deg_to_ms(degrees: float) -> int:
+    return int((degrees / DEG_PER_SECOND) * 1000)
+
+
+# ── Drive commands ────────────────────────────────────────────────────────────
+
+def forward(cm: float):
+    ms = _cm_to_ms(cm)
+    print(f"    → forward {cm}cm ({ms}ms)")
+    _post("drive/time", {"LinearVelocity": DRIVE_SPEED, "AngularVelocity": 0, "TimeMs": ms})
+    time.sleep(ms / 1000 + 0.3)
+
+
+def back(cm: float):
+    ms = _cm_to_ms(cm)
+    print(f"    → back {cm}cm ({ms}ms)")
+    _post("drive/time", {"LinearVelocity": -DRIVE_SPEED, "AngularVelocity": 0, "TimeMs": ms})
+    time.sleep(ms / 1000 + 0.3)
+
+
+def turn_left(degrees: float):
+    ms = _deg_to_ms(degrees)
+    print(f"    → turn left {degrees}° ({ms}ms)")
+    _post("drive/time", {"LinearVelocity": 0, "AngularVelocity": TURN_SPEED, "TimeMs": ms})
+    time.sleep(ms / 1000 + 0.3)
+
+
+def turn_right(degrees: float):
+    ms = _deg_to_ms(degrees)
+    print(f"    → turn right {degrees}° ({ms}ms)")
+    _post("drive/time", {"LinearVelocity": 0, "AngularVelocity": -TURN_SPEED, "TimeMs": ms})
+    time.sleep(ms / 1000 + 0.3)
+
+
+def stop():
+    print("    → stop")
+    _post("drive/stop", {})
+
+
+# ── Speech ────────────────────────────────────────────────────────────────────
+
+def speak(text: str, wait: bool = True):
+    print(f"    🗣  \"{text}\"")
+    _post("tts/speak", {"Text": text, "Flush": True})
+    if wait:
+        time.sleep(len(text) * 0.08 + 0.5)
+
+
+# ── LED ───────────────────────────────────────────────────────────────────────
+
+def led(r: int, g: int, b: int):
+    _post("led", {"Red": r, "Green": g, "Blue": b})
+
+def led_ready():   led(0, 80, 200)    # blue
+def led_error():   led(200, 0, 0)     # red
+def led_success(): led(0, 200, 80)    # green
+def led_win():     led(255, 180, 0)   # gold
+
+
+# ── Hazards ───────────────────────────────────────────────────────────────────
+
+def disable_hazards():
+    print("  Disabling hazard sensors...")
+    _post("hazard/updatebasesettings", {
+        "RevertToDefault": False,
+        "DisableTimeOfFlights": True,
+        "DisableBumpSensors": True
+    })
+
+def enable_hazards():
+    print("  Re-enabling hazard sensors...")
+    _post("hazard/updatebasesettings", {"RevertToDefault": True})
+
+
+# ── Expressive ────────────────────────────────────────────────────────────────
+
+def celebrate():
+    led_win()
+    speak("Congratulations! You solved the maze. Thanks for playing!")
+    _post("head", {"Pitch": -10, "Roll": 0, "Yaw": 0, "Velocity": 60})
+    time.sleep(0.4)
+    _post("head", {"Pitch": 10, "Roll": 0, "Yaw": 0, "Velocity": 60})
+    time.sleep(0.4)
+    _post("head", {"Pitch": 0, "Roll": 0, "Yaw": 0, "Velocity": 60})
+
+
+def execute_drive_map(drive_map: list[tuple]):
+    for command in drive_map:
+        print(f"    Executing: {command}")
+        action = command[0]
+        if action == "forward":
+            forward(command[1])
+        elif action == "back":
+            back(command[1])
+        elif action == "turn_left":
+            turn_left(command[1])
+        elif action == "turn_right":
+            turn_right(command[1])
+        elif action == "stop":
+            stop()
+        else:
+            raise ValueError(f"Unknown drive command: '{action}'")
+
+
+# ── Connection test ───────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "disable_hazards":
+        disable_hazards()
+        print("Hazards disabled.")
+    elif len(sys.argv) > 1 and sys.argv[1] == "enable_hazards":
+        enable_hazards()
+        print("Hazards enabled.")
+    else:
+        print("Testing connection to Misty...")
+        try:
+            r = requests.get(f"{BASE_URL}/device", timeout=5)
+            data = r.json()
+            battery = data['result']['batteryLevel']['chargePercent']
+            print(f"Connected!  Battery: {battery:.0%}")
+            print("\nTesting LED...")
+            led_ready();   time.sleep(0.8)
+            led_error();   time.sleep(0.8)
+            led_success(); time.sleep(0.8)
+            led(0, 0, 0)
+            print("LED OK.")
+            print("\nTesting speech...")
+            speak("Hello! I am ready to play the maze game.")
+            print("All tests passed.")
+        except Exception as e:
+            print(f"Error: {e}")
