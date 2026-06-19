@@ -65,6 +65,13 @@ def turn_right(degrees: float):
     time.sleep(ms / 1000 + 0.3)
 
 
+def turn_180():
+    ms = _deg_to_ms(180)
+    print(f"    → turn 180° ({ms}ms)")
+    _post("drive/time", {"LinearVelocity": 0, "AngularVelocity": TURN_SPEED, "TimeMs": ms})
+    time.sleep(ms / 1000 + 0.3)
+
+
 def stop():
     print("    → stop")
     _post("drive/stop", {})
@@ -117,6 +124,55 @@ def celebrate():
     _post("head", {"Pitch": 0, "Roll": 0, "Yaw": 0, "Velocity": 60})
 
 
+def recalibrate_at_home(marker_id: int = 0, nudge_deg: float = 8.0):
+    """
+    Take a photo with Misty's camera, detect the home ArUco marker,
+    and nudge left/right to re-centre. Place marker ID 0 on the wall/floor
+    directly in front of Misty's home position at camera height.
+    """
+    import base64
+    import numpy as np
+    import cv2
+
+    print("  [recalibrate] Taking picture...")
+    try:
+        r = requests.get(f"{BASE_URL}/cameras/rgb", params={"Base64": "true"}, timeout=10)
+        r.raise_for_status()
+        img_b64 = r.json()["result"]["base64"]
+    except Exception as e:
+        print(f"  [recalibrate] Camera error: {e} — skipping")
+        return
+
+    img_bytes  = base64.b64decode(img_b64)
+    frame      = cv2.imdecode(np.frombuffer(img_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    detector   = cv2.aruco.ArucoDetector(dictionary, cv2.aruco.DetectorParameters())
+    corners, ids, _ = detector.detectMarkers(frame)
+
+    if ids is None:
+        print(f"  [recalibrate] No markers detected — skipping")
+        return
+
+    for i, mid in enumerate(ids):
+        if int(mid[0]) == marker_id:
+            cx         = corners[i][0][:, 0].mean()
+            frame_cx   = frame.shape[1] / 2
+            offset_px  = cx - frame_cx          # + = marker is right → robot drifted left
+            threshold  = frame.shape[1] * 0.05  # 5 % of frame width
+
+            if offset_px > threshold:
+                print(f"  [recalibrate] Drifted left ({offset_px:.0f}px) — nudging right {nudge_deg}°")
+                turn_right(nudge_deg)
+            elif offset_px < -threshold:
+                print(f"  [recalibrate] Drifted right ({abs(offset_px):.0f}px) — nudging left {nudge_deg}°")
+                turn_left(nudge_deg)
+            else:
+                print(f"  [recalibrate] On target (offset {offset_px:.0f}px) — no correction")
+            return
+
+    print(f"  [recalibrate] Marker {marker_id} not in frame — skipping")
+
+
 def execute_drive_map(drive_map: list[tuple]):
     for command in drive_map:
         print(f"    Executing: {command}")
@@ -129,6 +185,8 @@ def execute_drive_map(drive_map: list[tuple]):
             turn_left(command[1])
         elif action == "turn_right":
             turn_right(command[1])
+        elif action == "turn_180":
+            turn_180()
         elif action == "stop":
             stop()
         else:

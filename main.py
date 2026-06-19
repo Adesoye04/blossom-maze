@@ -1,4 +1,5 @@
 import misty
+import narrator
 from maps      import get_active_map
 from detector  import run_detector
 from validator import validate_and_message, ValidationResult
@@ -15,6 +16,10 @@ def run_game():
     print(f"{'='*50}\n")
 
     misty.disable_hazards()
+
+    print("\nGenerating narration (this takes ~30 seconds)...")
+    narration = narrator.pre_generate(active_map.checkpoints)
+
     misty.led_ready()
     misty.speak(
         f"Welcome to the Misty Maze! Today's map is {active_map.name}. "
@@ -22,15 +27,17 @@ def run_game():
     )
 
     for i, checkpoint in enumerate(active_map.checkpoints, 1):
-        is_last = (i == total)
+        is_last  = (i == total)
+        msgs     = narration[i - 1]
 
         print(f"\n── Phase {i} of {total} ──────────────────────────────")
+        print(f"   Location   : {checkpoint.location}")
         print(f"   Sequence   : {checkpoint.sequence}")
         print(f"   Drive map  : {checkpoint.drive_map}")
         print(f"   Return map : {checkpoint.return_map}")
 
         misty.led_ready()
-        misty.speak(checkpoint.hint)
+        misty.speak(msgs["hint"])
 
         attempts = 0
         while True:
@@ -46,20 +53,21 @@ def run_game():
 
             attempts += 1
             print(f"   Scanned : {scanned}")
-            result, message = validate_and_message(scanned, checkpoint.sequence)
+            result, _ = validate_and_message(scanned, checkpoint.sequence)
             print(f"   Result  : {result.value}")
 
             if result == ValidationResult.CORRECT:
                 misty.led_success()
-                misty.speak(message)
+                misty.speak(msgs["success"])
 
                 print(f"\n   Driving out...")
                 misty.execute_drive_map(checkpoint.drive_map)
 
                 if checkpoint.return_map:
-                    misty.speak("Now heading back home!")
+                    misty.speak(msgs["returning"])
                     print(f"   Returning home...")
                     misty.execute_drive_map(checkpoint.return_map)
+                    misty.recalibrate_at_home()
 
                 if is_last:
                     print("\n   Final phase complete!")
@@ -68,9 +76,15 @@ def run_game():
                     misty.speak(f"Great work! On to leg {i + 1}.")
                 break
 
+            elif result == ValidationResult.WRONG_ORDER:
+                misty.led_error()
+                misty.speak(msgs["wrong_order"])
+                misty.led_ready()
+                print("   Try again.\n")
+
             else:
                 misty.led_error()
-                misty.speak(message)
+                misty.speak(msgs["wrong_ids"])
                 misty.led_ready()
                 print("   Try again.\n")
 

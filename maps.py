@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from misty import turn_180
+
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -9,6 +11,7 @@ class Checkpoint:
     hint:       str
     drive_map:  list[tuple]
     return_map: list[tuple] = field(default_factory=list)
+    location:   str = "destination"
 
 
 @dataclass
@@ -32,19 +35,25 @@ MAPS: dict[int, Map] = {
                 sequence   = [1, 1],
                 hint       = "Leg one — place two cards to send me forward.",
                 drive_map  = [
-                    ("forward", DISTANCE),
-                    ("forward", DISTANCE),
+                    ("turn_180",),
+                    ("turn_180",),
+                    ("turn_180",),
+                    ("turn_180",),
+                    ("turn_180")
                 ],
                 return_map = [
-                    ("back", DISTANCE),
-                    ("back", DISTANCE),
+                    ("turn_180",),
+                    ("forward",  DISTANCE),
+                    ("forward",  DISTANCE),
+                    ("turn_180",),
                 ],
             ),
 
             # Phase 2: forward, left, forward, left, forward
             Checkpoint(
                 sequence   = [1, 2, 1, 2, 1],
-                hint       = "Leg two — five cards. Two left turns!",
+                hint       = "Leg two — five cards. Two left turns! Heading to the supermarket.",
+                location   = "supermarket",
                 drive_map  = [
                     ("forward",   DISTANCE),
                     ("turn_left", TURN),
@@ -53,11 +62,13 @@ MAPS: dict[int, Map] = {
                     ("forward",   DISTANCE),
                 ],
                 return_map = [
-                    ("back",       DISTANCE),
+                    ("turn_180",),
+                    ("forward",    DISTANCE),
                     ("turn_right", TURN),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
                     ("turn_right", TURN),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
+                    ("turn_180",),
                 ],
             ),
 
@@ -73,18 +84,21 @@ MAPS: dict[int, Map] = {
                     ("forward",    DISTANCE),
                 ],
                 return_map = [
-                    ("back",       DISTANCE),
+                    ("turn_180",),
+                    ("forward",    DISTANCE),
                     ("turn_left",  TURN),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
                     ("turn_right", TURN),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
+                    ("turn_180",),
                 ],
             ),
 
             # Phase 4: forward, left, forward, forward, left, forward
             Checkpoint(
                 sequence   = [1, 2, 1, 1, 2, 1],
-                hint       = "Leg four — six cards. Watch for the double forward!",
+                hint       = "Leg four — six cards. Watch for the double forward! Heading to school.",
+                location   = "school",
                 drive_map  = [
                     ("forward",   DISTANCE),
                     ("turn_left", TURN),
@@ -94,12 +108,14 @@ MAPS: dict[int, Map] = {
                     ("forward",   DISTANCE),
                 ],
                 return_map = [
-                    ("back",       DISTANCE),
+                    ("turn_180",),
+                    ("forward",    DISTANCE),
                     ("turn_right", TURN),
-                    ("back",       DISTANCE),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
+                    ("forward",    DISTANCE),
                     ("turn_right", TURN),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
+                    ("turn_180",),
                 ],
             ),
 
@@ -116,12 +132,14 @@ MAPS: dict[int, Map] = {
                     ("forward",    DISTANCE),
                 ],
                 return_map = [
-                    ("back",       DISTANCE),
+                    ("turn_180",),
+                    ("forward",    DISTANCE),
                     ("turn_left",  TURN),
-                    ("back",       DISTANCE),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
+                    ("forward",    DISTANCE),
                     ("turn_right", TURN),
-                    ("back",       DISTANCE),
+                    ("forward",    DISTANCE),
+                    ("turn_180",),
                 ],
             ),
         ],
